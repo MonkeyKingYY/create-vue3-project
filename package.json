@@ -1,0 +1,21 @@
+{
+    "name": "create-vue3-project",
+    "version": "0.0.4",
+    "description": "",
+    "main": "index.js",
+    "bin": "index.js",
+    "author": "yuanye",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/MonkeyKingYY/create-vue3-project.git"
+    },
+    "bugs": {
+        "url": "https://github.com/MonkeyKingYY/create-vue3-project/issues"
+    },
+    "homepage": "https://github.com/MonkeyKingYY/create-vue3-project/tree/master/#readme",
+    "dependencies": {
+        "fs-extra": "^9.0.1",
+        "minimist": "^1.2.5"
+    }
+}

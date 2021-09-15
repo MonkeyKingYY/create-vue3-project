@@ -1,0 +1,901 @@
+<template>
+    <div class="ocr-check-wrap">
+        <div class="title gap">委托书录入第二步：基于OCR识别结果完成录入</div>
+        <form @submit.prevent="saveFn">
+            <div layout="row" class="gap main-content-wrap">
+                <div flex class="edit-content-wrap">
+                    <div class="content-title" flex>房源委托书录入</div>
+                    <div class="edit-content" layout="row">
+                        <div class="side-bar">
+                            <ul>
+                                <template v-for="list in tabListRef">
+                                    <li v-for="(item,index) in list"
+                                        layout="row" layout-align="start center"
+                                        :class="{active:+tabRef===+item.id}"
+                                        @click="changeTabFn(item)">
+                                        <span flex>{{changeTabTitle(item.title,index,list.length)}}</span>
+                                        <span flex class="icon-newlab" v-if="newFlagRef"></span>
+                                        <span class="icon-close" v-if="list.length>1"
+                                              @click.stop="deleteFileInfoFn(+item.id)"></span>
+                                    </li>
+                                </template>
+                            </ul>
+                            <div class="add-file" layout="row" layout-align="center center" @click="uploadFileFn">
+                                <span class="icon-addcirle"></span>上传附件
+                            </div>
+                            <div class="invite-owner" @click="inviteUploadFn">邀请业主上传附件</div>
+                        </div>
+                        <div flex class="main-content">
+                            <component :is="'ocrComp' + curModificationTypeRef"
+                                       v-if="ocrInfoListInfoRef.length"
+                                       :data="ocrInfoListInfoRef[tabRef].info"
+                                       :update-ocr="updateOcr"
+                                       :agentList="agentListRef"
+                                       @addClient="addClientFn"
+                                       @addAgent="addAgentFn"
+                                       @deleHouseOwner="deleHouseOwnerFn"/>
+                        </div>
+                    </div>
+                </div>
+                <div flex class="show-content-wrap">
+                    <div class="content-title" flex style="background: #FF8200">
+                        OCR识别委托附件
+                    </div>
+                    <div flex class="show-content" layout="row" v-if="curPicturePrimaryType != null">
+                        <div class="logo-label"
+                             v-if="ocrInfoListInfoRef.length && bigPIcListRef[curBigPicRef] && bigPIcListRef[curBigPicRef]['certificateSource']">
+                            {{bigPIcListRef[curBigPicRef]['certificateSource']}}
+                        </div>
+                        <div flex class="main-content pic-loader"
+                             v-pic-scale="imgUrl" layout="column" layout-align="start center">
+                            <div class="img-box" flex>
+                                <div class="img"
+                                     :style="{backgroundImage:`url(${bigPIcListRef[curBigPicRef]['certificateUrl']})`}"
+                                     v-if="ocrInfoListInfoRef.length && bigPIcListRef[curBigPicRef] && bigPIcListRef[curBigPicRef]['certificateUrl']"
+                                     draggable="false">
+                                </div>
+                            </div>
+                            <div class="img-handle" layout="row" layout-align="center center">
+                                <span class="icon-lefthard" @click="prevFn"></span>
+                                <span class="icon-roundl turn-left"></span>
+                                <span class="icon-meme reset-img"></span>
+                                <span class="icon-roundr turn-right"></span>
+                                <span class="icon-righthard" @click="nextFn"></span>
+                            </div>
+                        </div>
+                        <div class="small-img-list" layout="column" layout-align="start center">
+                            <input type="file" style="display: none" accept="image/*"
+                                   @change="replacePicFn" ref="replacePicRef">
+                            <input type="file" style="display: none" accept="image/*"
+                                   @change="addPicFn" ref="addPicRef">
+                            <div layout="row" layout-align="space-between center" class="handle">
+                                <a href="javascript:" @click="deletePicFn">批量删除</a>
+                                <a href="javascript:" @click="reIdentifyFn">重新识别</a>
+                            </div>
+                            <ul>
+                                <template v-if="fileTypeList && fileTypeList.length">
+                                    <li v-for="type in fileTypeList">
+                                        <template v-if="picListRef[type.valueCode]">
+                                            <div v-for="(item,index) in picListRef[type.valueCode]"
+                                                 class="small-img-box split">
+                                                <div layout="row" class="top" layout-align="space-between center">
+                                                    <div class="img-type">
+                                                        <input type="checkbox" style="vertical-align: -2px"
+                                                               v-model="item.isSelected">
+                                                        {{item.certificateSecondaryStr}}
+                                                    </div>
+                                                    <span class="icon-change1" @click="replaceSingePicFn()"></span>
+                                                </div>
+                                                <div class="img" layout="column" layout-align="center center"
+                                                     @click="switchPicFn(item.id)">
+                                                    <img :src="item.certificateUrl" alt="">
+                                                </div>
+                                                <div layout="row" layout-align="start center"
+                                                     v-if="picListRef[type.valueCode].length>1">
+                                                    <span>相同附件</span>
+                                                    <div flex></div>
+                                                    <form-item type="switch" is-number v-model="item.isUse"
+                                                               style="margin-right: -38px"
+                                                               @click="changeUseStateFn(item.isUse,index,picListRef[type.valueCode])"/>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <template v-else-if="type.card">
+                                            <div class="small-img-box split">
+                                                <div layout="row" class="top" layout-align="space-between center">
+                                                    <div class="img-type">
+                                                        其他类型身份证
+                                                    </div>
+                                                </div>
+                                                <div class="img" @click="addSinglePicFn">
+                                                    <img :src="defaultSrc" alt="" class="img-default">
+                                                </div>
+                                                <form-item type="select" :list="type.list"/>
+                                            </div>
+                                        </template>
+                                        <template v-else>
+                                            <div class="small-img-box split">
+                                                <div layout="row" class="top" layout-align="space-between center">
+                                                    <div class="img-type">
+                                                        {{type.valueName}}
+                                                    </div>
+                                                </div>
+                                                <div class="img" @click="addSinglePicFn">
+                                                    <img :src="defaultSrc" alt="" class="img-default">
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </li>
+                                </template>
+                                <template v-else>
+                                    <li v-for="item in picListRef['对应的额外分组']">
+                                        <div class="small-img-box split">
+                                            <div layout="row" class="top" layout-align="space-between center">
+                                                <div class="img-type">
+                                                    <input type="checkbox" style="vertical-align: -2px">
+                                                    {{item.certificateSecondaryStr}}
+                                                </div>
+                                            </div>
+                                            <div class="img">
+                                                <img :src="item.certificateUrl" alt="">
+                                            </div>
+                                        </div>
+                                    </li>
+                                    <li>
+                                        <div class="small-img-box split">
+                                            <div layout="row" class="top" layout-align="space-between center">
+                                                <div class="img-type">
+                                                    上传图片
+                                                </div>
+                                            </div>
+                                            <div class="img" @click="addSinglePicFn">
+                                                <img :src="defaultSrc" alt="" class="img-default">
+                                            </div>
+                                        </div>
+                                    </li>
+                                </template>
+                            </ul>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div layout="row" layout-align="center center" class="button-wrap">
+                <button type="submit" class="btn ">保存草稿</button>
+                <button type="button" class="btn btn-primary ml-10" @click="$emit('close')">生成草拟委托</button>
+            </div>
+        </form>
+    </div>
+</template>
+
+<script>
+    import {onMounted, ref, reactive, computed} from 'vue'
+    import picScale from './components/pic-scale.directive.js'
+    import ocrHouseInfo from './components/ocr-house-info.vue'
+    import ocrClientInfo from './components/ocr-client-info.vue'
+    import ocrAgentInfo from './components/ocr-agent-info.vue'
+    import ocrAuthorizationInfo from './components/ocr-authorization-info.vue'
+    import ocrHouseService from './components/ocr-house-sevice.vue'
+    import ocrCompanyInfo from './components/ocr-company-info.vue'
+    import {getOcrInfoList} from "./service";
+    import {data} from "./data.js";
+    import {modal} from "../../../common/modal/modal";
+    import {fileTypeSecondEnum, fileTypeSecondEnum1} from './enum'
+    import {get, fileUpload, post} from "../../../util";
+
+    export default {
+        components: {
+            ocrComp0: ocrHouseInfo,
+            ocrComp1: ocrClientInfo,
+            ocrComp2: ocrAgentInfo,
+            ocrComp3: ocrAuthorizationInfo,
+            ocrComp4: ocrHouseService,
+            ocrComp5: ocrCompanyInfo
+        },
+        directives: {picScale},
+        setup() {
+            let tabRef = ref(0)
+            let ocrInfoListInfoRef = ref([])
+            let tabListRef = getTabList();
+            let inviteListRef = getInviteListRef()
+            let bigPIcListRef = getBigPicsRef()
+            let picListRef = getPicList()
+            let newFlagRef = ref(false)
+            let curModificationTypeRef = ref(0)
+            let curPicturePrimaryType = ref(1)
+            let curBigPicRef = ref(0)
+            let agentListRef = computedAgentList()
+            let subTabIndexRef = ref(0);
+            let defaultSrc = import.meta.env.BASE_URL + 'upload-default.png'
+            let updateOcr = reactive({canUse: false, data: {}, diffSize: 1, passSize: 0})
+            let replacePicRef = ref()
+            let addPicRef = ref()
+            let imgUrl = 'http://image2t.5i5j.com/bdir/floor/cfe6c525d3364646a02e19840d7eedde.jpg'
+
+            onMounted(async () => {
+                ocrInfoListInfoRef.value = data
+                updateOcr.canUse = true;
+                updateOcr.data = {
+                    locAddress: 'aaaaaa',
+                    houseNature: '2',
+                    titleDeedInfo: [
+                        {name: 'titleDeedInfo-=ssss', titleDeedCode: 'xxxx'}
+                    ]
+                };
+                let updateTitleDeedInfo = updateOcr.data.titleDeedInfo
+                if (updateTitleDeedInfo && updateTitleDeedInfo.length) {
+                    updateTitleDeedInfo.forEach(item => {
+                        item.isDiffer = true
+                        ocrInfoListInfoRef.value[tabRef.value].info.titleDeedInfo.push(item)
+                    })
+                    delete updateOcr.data.titleDeedInfo;
+                }
+                updateOcr.passList = [];
+                updateOcr.diffSize = 2;
+            })
+
+
+            //切换页签
+            function changeTabFn(item) {
+                tabRef.value = +item.id;
+                // 当前的页签枚举类型
+                curModificationTypeRef.value = +item.modificationType;
+                // 当前的页签的一级类型
+                curPicturePrimaryType.value = item.picturePrimaryType == null ? null : +item.picturePrimaryType
+                subTabIndexRef.value = item.index;
+                // 当前页签下大图索引
+                curBigPicRef.value = 0
+            }
+
+            // 启用该图片，则禁用其他同类型图片，禁用该图片，不影响信息展示
+            function changeUseStateFn(state, index, list) {
+                if (+state === 1) {
+                    list.filter((a, i) => i !== index).forEach(b => b.isUse = 0)
+                }
+            }
+
+            // 获取左侧页签列表
+            function getTabList() {
+                return computed(() => {
+                    const group = {};
+                    ocrInfoListInfoRef.value.map((item, index) => {
+                        return {
+                            id: +index,
+                            title: item.title,
+                            modificationType: item.modificationType,
+                            picturePrimaryType: item.picturePrimaryType,
+                            index: 0
+                        }
+                    }).forEach(a => {
+                        const list = group[a.modificationType] || []
+                        a.index = list.length;
+                        list.push(a);
+                        group[a.modificationType] = list;
+                    })
+                    return Object.values(group);
+                })
+            }
+
+            // 获取右侧图片列表
+            function getPicList() {
+                return computed(() => {
+                    if (ocrInfoListInfoRef && Array.isArray(ocrInfoListInfoRef.value)) {
+                        const list = ocrInfoListInfoRef.value[tabRef.value]
+                        const map = {};
+                        if (list && list.pic) {
+                            list.pic.forEach(a => {
+                                const type = a.certificateSecondaryType;
+                                if (!map[type]) {
+                                    map[type] = [];
+                                }
+                                map[type].push(a);
+                            })
+                        }
+                        return map;
+                    }
+                    return {};
+                })
+            }
+
+            // 获取轮播图列表
+            function getBigPicsRef() {
+                return computed(() => {
+                    let picList = ocrInfoListInfoRef.value[tabRef.value]
+                    return picList && picList.pic ? picList.pic : []
+                })
+            }
+
+            // 点击切换下一张大图
+            function nextFn() {
+                curBigPicRef.value = curBigPicRef.value + 1;
+                if (curBigPicRef.value >= bigPIcListRef.value.length) {
+                    curBigPicRef.value = 0
+                }
+            }
+
+            // 点击切换上一张大图
+            function prevFn() {
+                curBigPicRef.value = curBigPicRef.value - 1;
+                if (curBigPicRef.value < 0) {
+                    curBigPicRef.value = bigPIcListRef.value.length - 1
+                }
+            }
+
+            // 点击切换大图索引
+            function switchPicFn(id) {
+                const picIndex = bigPIcListRef.value.findIndex(item => +item.id === +id)
+                if (picIndex > -1) {
+                    curBigPicRef.value = +picIndex
+                }
+            }
+
+            // 获取邀请上传附件列表
+            function getInviteListRef() {
+                return computed(() => {
+                    let map = ocrInfoListInfoRef.value.map(item => {
+                        let picturePrimaryType = item.picturePrimaryType == null ? null : +item.picturePrimaryType
+                        if (picturePrimaryType == 4) {
+                            return {
+                                picturePrimaryType,
+                                title: '代理人授权函',
+                                list: [{valueCode: '401', valueName: '代理人授权函'}],
+                            }
+                        } else if (picturePrimaryType == 7) {
+                            return {
+                                picturePrimaryType,
+                                title: '其他',
+                                list: [{valueCode: '701', valueName: '其他'}],
+                            }
+                        } else {
+                            return {
+                                picturePrimaryType,
+                                title: item.title,
+                                list: fileTypeSecondEnum1[picturePrimaryType]
+                            }
+                        }
+                    })
+
+                    let groupByPrimaryType = groupBy(map, 'picturePrimaryType');
+                    return Object.values(groupByPrimaryType)
+                })
+            }
+
+
+            function deletePicFn() {
+
+            }
+
+            // 获取所有的代理人姓名列表，传值给委托页签
+            function computedAgentList() {
+                return computed(() => {
+                    let agentList = ocrInfoListInfoRef.value.filter(item => +item.modificationType === 1 || +item.modificationType === 2).map((item, index) => {
+                        return {
+                            valueName: item.info.name,
+                            valueCode: index
+                        }
+                    });
+                    agentList.push({valueName: '添加代理人', valueCode: agentList.length})
+                    return agentList
+                })
+            }
+
+            // 修改左侧页签标题
+            function changeTabTitle(name, index, dataLength) {
+                let reg = /\d/;
+                if (reg.test(name)) {
+                    let str = name.slice(0, name.length - 3)
+                    return dataLength > 1 ? `${str}${index + 1}信息` : `${str}信息`
+                } else {
+                    return name
+                }
+            }
+
+            // 添加房屋所有权人及证件
+            async function addClientFn() {
+                await modal.open(import('./popup/upload-file-modal.vue'), {
+                    title: '添加房屋所有权人及证件',
+                    width: '800px',
+                    data: {
+                        type: 'addClient'
+                    }
+                })
+            }
+
+            // 添加代理人授权函
+            async function addAgentFn() {
+                await modal.open(import('./popup/upload-file-modal.vue'), {
+                    title: '添加代理人授权函',
+                    width: '800px',
+                    data: {
+                        type: 'addAgent'
+                    }
+                })
+            }
+
+            // 添加附件
+            async function uploadFileFn() {
+                await modal.open(import('./popup/upload-file-modal.vue'), {
+                    title: '添加附件',
+                    width: '800px',
+                    data: {
+                        type: 'uploadAll'
+                    }
+                })
+            }
+
+            async function inviteUploadFn() {
+                const data = await modal.open(import('./popup/invite-upload-modal.vue'), {
+                    title: '邀请业主上传附件',
+                    width: '800px',
+                    data: {
+                        inviteListRef: inviteListRef.value,
+                    }
+                })
+                inviteListRef.value.forEach(item => {
+                    item.forEach(obj => {
+                        if (obj.checked && obj.checked.length) {
+                            obj.checked = []
+                        }
+                    })
+                })
+            }
+
+            // 删除房屋所有权人
+            function deleHouseOwnerFn(index) {
+                let currentHouseInfo = ocrInfoListInfoRef.value[tabRef.value]['info']
+                let houseOwnData = currentHouseInfo.titleDeedInfo
+                if (houseOwnData && houseOwnData.length) {
+                    houseOwnData.splice(index, 1)
+                }
+            }
+
+            // 删除最左侧页签
+            async function deleteFileInfoFn(id) {
+                const confirm = await modal.confirm('确认要删除该页签？');
+                if (confirm) {
+                    ocrInfoListInfoRef.value.splice(id, 1)
+                }
+            }
+
+            // 图片重新识别
+            function reIdentifyFn() {
+                // 禁用的图片不能进行识别
+
+            }
+
+            // 替换单张图片
+            function replaceSingePicFn() {
+                replacePicRef.value.click()
+            }
+
+            // 替换单张图片
+            async function replacePicFn() {
+                // 禁用的图片可以替换，但是返回的ocr信息不用跟新回显
+
+                let file = replacePicRef.value.files
+                const data = await fileUpload(replacePicRef.value.files)
+
+                let ocrBody = {
+                    certificateUrl: ""
+                }
+                const ocrData = await post("/sales/house/proxy/replaceAttachment", ocrBody)
+
+                // let ocrData = {
+                //     certificateUrl: '',
+                //     identifyResult: 0, // 0 识别成功 1 识别失败
+                //     identifyContent: {
+                //         ownership: 2,
+                //         titleDeedInfo: [
+                //             {
+                //                 name: "金阳6",
+                //                 titleDeedCode: "京2020朝不动产权第333号"
+                //             },
+                //             {
+                //                 name: "金阳2",
+                //                 titleDeedCode: "京2020朝不动产权第XXXXXX号"
+                //             }
+                //         ]
+                //     }
+                // }
+
+            }
+
+            // 添加单张图片
+            function addPicFn() {
+            }
+
+            function addSinglePicFn() {
+                addPicRef.value.click()
+            }
+
+            function saveFn() {
+
+            }
+
+
+            const fileTypeRef = fileTypeSecondEnum(picListRef);
+            const fileTypeList = computed(() => {
+                return (fileTypeRef[curPicturePrimaryType.value] || {}).list || []
+            });
+
+            function groupBy(objectArray, property) {
+                return objectArray.reduce(function (acc, obj) {
+                    let key = obj[property];
+                    if (!acc[key]) {
+                        acc[key] = [];
+                    }
+                    acc[key].push(obj);
+                    return acc;
+                }, {});
+            }
+
+            return {
+                tabRef,
+                curModificationTypeRef,
+                curPicturePrimaryType,
+                agentListRef,
+                updateOcr,
+                addAgentFn,
+                replaceSingePicFn,
+                addSinglePicFn,
+                changeTabFn,
+                changeTabTitle,
+                uploadFileFn,
+                addClientFn,
+                replacePicFn,
+                addPicRef,
+                addPicFn,
+                imgUrl,
+                saveFn,
+                deleHouseOwnerFn,
+                picListRef,
+                inviteUploadFn,
+                reIdentifyFn,
+                replacePicRef,
+                changeUseStateFn,
+                tabListRef,
+                newFlagRef,
+                deleteFileInfoFn,
+                ocrInfoListInfoRef,
+                defaultSrc,
+                fileTypeList,
+                inviteListRef,
+                bigPIcListRef,
+                curBigPicRef,
+                prevFn,
+                nextFn,
+                switchPicFn
+            }
+        }
+    }
+</script>
+
+<style lang="less" scoped>
+    .ocr-check-wrap {
+        background: #FFFFFF;
+
+
+        ::v-deep(.form-label) {
+            width: 115px;
+        }
+
+        ::v-deep(.form-interface) {
+            margin-top: 5px;
+            margin-bottom: 5px;
+            padding-right: 15px;
+        }
+
+        ::v-deep(.form-control) {
+            background: #FFF9F2;
+        }
+
+        ::v-deep(.search-wrap input) {
+            background: #FFFFFF;
+        }
+
+        .title {
+            height: 55px;
+            font-size: 17px;
+            font-weight: 700;
+            line-height: 65px;
+        }
+
+        .gap {
+            padding: 0 30px
+        }
+
+        .content-title {
+            height: 35px;
+            text-align: center;
+            line-height: 35px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #FFFFFF;
+            background: #4377DE;
+            margin-bottom: 10px;
+
+            &:last-child {
+                background: #FF8200;
+                margin-left: 8px;
+            }
+        }
+
+        .main-content-wrap {
+            height: calc(100vh - 110px);
+            box-sizing: border-box;
+            padding-bottom: 15px;
+
+            .main-content {
+                height: 100%;
+                background: #FFFFFF;
+                box-shadow: 0 6px 8px 0 rgba(0, 0, 0, 0.07);
+                padding: 0 17px;
+            }
+
+            .edit-content-wrap {
+                height: 100%;
+
+                .edit-content {
+                    height: calc(100% - 30px);
+                    padding: 20px;
+                    background: #F8FAFF;
+
+                    .side-bar {
+                        width: 158px;
+                        margin-right: 12px;
+                        overflow-x: hidden;
+                        overflow-y: auto;
+                        box-sizing: border-box;
+
+                        .add-file {
+                            margin-top: 16px;
+                            color: #4377DE;
+                            height: 40px;
+                            background: #FFFFFF;
+                            border: 1px dashed #4377DE;
+                            box-sizing: border-box;
+
+                            .icon-addcirle {
+                                color: #4377DE;
+                                font-size: 15px;
+                                margin: -2px 6px 0 0;
+                            }
+                        }
+
+                        .invite-owner {
+                            margin-top: 5px;
+                            width: 168px;
+                            height: 40px;
+                            background: #4377DE;
+                            border-radius: 4px;
+                            line-height: 38px;
+                            text-align: center;
+                            color: white;
+                        }
+
+                        ul {
+                            li {
+                                position: relative;
+                                height: 42px;
+                                background: #F3F3F4;
+                                margin-bottom: 5px;
+                                cursor: pointer;
+                                padding-left: 16px;
+                                box-sizing: border-box;
+
+                                & > span:first-child {
+                                    margin-right: 2px;
+                                    word-break: keep-all;
+                                }
+
+                                &.active {
+                                    background: #FFFFFF;
+                                    box-shadow: 0 6px 8px 0 rgba(0, 0, 0, 0.07);
+
+                                    &:before {
+                                        position: absolute;
+                                        left: 0;
+                                        top: 0;
+                                        content: '';
+                                        display: block;
+                                        width: 4px;
+                                        height: 42px;
+                                        background: #4377DE;
+                                    }
+
+                                    & > span {
+                                        color: #4377DE;
+                                    }
+
+                                    & > .icon-close {
+                                        color: rgba(0, 0, 0, 0.19);
+                                    }
+                                }
+
+                                & > .icon-close {
+                                    color: rgba(0, 0, 0, 0.19);
+                                    font-size: 15px;
+                                    margin-right: 10px;
+
+                                    &:hover {
+                                        color: #FC1040;
+                                    }
+                                }
+
+                                & > .icon-newlab {
+                                    color: rgba(255, 114, 23, 1) !important;
+                                    font-size: 24px;
+                                    margin: -8px 0 0;
+                                }
+                            }
+                        }
+                    }
+
+                    .main-content {
+                        overflow-x: hidden;
+                        overflow-y: auto;
+                        box-sizing: border-box;
+                    }
+                }
+            }
+
+            .show-content-wrap {
+                margin-left: 8px;
+
+                .show-content {
+                    background: #FFF9F2;
+                    padding: 20px;
+                    position: relative;
+                    height: calc(100% - 30px);
+
+                    .logo-label {
+                        position: absolute;
+                        padding: 2px 3px;
+                        background: #FF8200;
+                        border-radius: 4px;
+                        left: 12px;
+                        top: 11px;
+                        color: white;
+                    }
+
+                    .pic-loader {
+                        cursor: move;
+
+                        & > .img-box {
+                            margin: 20px 0 0;
+                            width: 100%;
+                            position: relative;
+                            overflow: hidden;
+                        }
+
+                        .img {
+                            position: relative;
+                            width: 100%;
+                            height: 100%;
+                            will-change: transform, left, top, width, height;
+                            background-position: center center;
+                            background-size: contain;
+                            background-repeat: no-repeat;
+
+                        }
+
+                        .img-handle {
+                            height: 94px;
+
+                            & > span {
+                                width: 42px;
+                                height: 42px;
+                                background: #F3F3F4;
+                                border-radius: 21px;
+                                text-align: center;
+                                line-height: 42px;
+                                font-size: 21px;
+                                color: #AFB3C2;
+                                cursor: pointer;
+
+                                &:hover {
+                                    color: #4377DE;
+                                }
+
+                                &:not(:last-child) {
+                                    margin-right: 17px;
+                                }
+
+                            }
+                        }
+                    }
+
+                    .small-img-list {
+                        width: 224px;
+                        height: 100%;
+                        background: #F3F3F4;
+
+                        .handle {
+                            width: 100%;
+                            height: 42px;
+                            padding: 0 20px;
+                            border-bottom: 1px dashed #E2E5F2;
+
+                            a {
+                                color: #4377DE;
+                            }
+                        }
+
+                        ul {
+                            height: calc(100% - 42px);
+                            overflow-x: hidden;
+                            overflow-y: auto;
+                            box-sizing: border-box;
+                            padding: 0 20px;
+                            width: 100%;
+
+                            li {
+                                margin: 12px 0;
+
+                                .small-img-box {
+                                    margin-bottom: 12px;
+                                    padding-bottom: 8px;
+                                }
+
+                                .split {
+                                    border-bottom: 1px dashed #E2E5F2;
+                                }
+
+                                .icon-change1 {
+                                    font-size: 18px;
+                                    color: #AFB3C2;
+                                }
+
+                                .img {
+                                    margin: 8px 0;
+                                    width: 180px;
+                                    height: 135px;
+                                    background: #FFFFFF;
+                                    border: 1px solid #E2E5F2;
+                                    box-sizing: border-box;
+
+                                    img {
+                                        max-width: 100%;
+                                        max-height: 100%;
+                                    }
+
+                                    .img-default {
+                                        width: 100%;
+                                        height: 100%;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        .button-wrap {
+            background: #F3F3F4;
+            height: 55px;
+            box-sizing: border-box
+        }
+
+        /*---滚动条默认显示样式--*/
+
+        ::-webkit-scrollbar-thumb {
+            background-color: #c7c7c7;
+            -webkit-border-radius: 5px;
+        }
+
+        /*---鼠标点击滚动条显示样式--*/
+
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: #c7c7c7;
+        }
+
+        ::-webkit-scrollbar-track-piece {
+            background-color: transparent;
+        }
+
+        ::-webkit-scrollbar {
+            width: 5px;
+        }
+    }
+</style>
